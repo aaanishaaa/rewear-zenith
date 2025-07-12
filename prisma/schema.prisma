@@ -1,0 +1,159 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  image         String?
+  points        Int       @default(100)
+  role          UserRole  @default(USER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  // Relations
+  items         Item[]
+  swapRequests  SwapRequest[]
+  swapsInitiated Swap[] @relation("InitiatedSwaps")
+  swapsReceived  Swap[] @relation("ReceivedSwaps")
+  accounts      Account[]
+  sessions      Session[]
+  
+  @@map("users")
+}
+
+// Account model for NextAuth
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+// Session model for NextAuth
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+// Verification Token model for NextAuth
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// Item model
+model Item {
+  id          String      @id @default(cuid())
+  title       String
+  description String
+  category    String
+  type        String
+  size        String
+  condition   String
+  tags        String[]
+  images      String[]
+  status      ItemStatus  @default(AVAILABLE)
+  pointValue  Int         @default(10)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  
+  // Relations
+  userId      String
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  swapRequests SwapRequest[]
+  swaps       Swap[]
+  
+  @@map("items")
+}
+
+// Swap Request model
+model SwapRequest {
+  id        String           @id @default(cuid())
+  message   String?
+  status    SwapRequestStatus @default(PENDING)
+  createdAt DateTime         @default(now())
+  
+  // Relations
+  requesterId String
+  requester   User   @relation(fields: [requesterId], references: [id], onDelete: Cascade)
+  itemId      String
+  item        Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  
+  @@map("swap_requests")
+}
+
+// Swap model
+model Swap {
+  id          String     @id @default(cuid())
+  status      SwapStatus @default(PENDING)
+  completedAt DateTime?
+  createdAt   DateTime   @default(now())
+  
+  // Relations
+  initiatorId String
+  initiator   User   @relation("InitiatedSwaps", fields: [initiatorId], references: [id])
+  receiverId  String
+  receiver    User   @relation("ReceivedSwaps", fields: [receiverId], references: [id])
+  itemId      String
+  item        Item   @relation(fields: [itemId], references: [id])
+  
+  @@map("swaps")
+}
+
+// Enums
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum ItemStatus {
+  AVAILABLE
+  PENDING_SWAP
+  SWAPPED
+  REMOVED
+}
+
+enum SwapRequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+enum SwapStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+}
